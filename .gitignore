@@ -1,0 +1,92 @@
+# ====================
+# uv
+# ====================
+.venv/
+.uv/
+uv.lock
+
+# ====================
+# Python
+# ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+MANIFEST
+.installed.cfg
+
+# ====================
+# Env / secrets
+# ====================
+.env
+.env.*
+!.env.example
+*.env
+secrets.json
+secrets.yaml
+secrets.toml
+
+# ====================
+# Type checking / linting
+# ====================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+.ruff_cache/
+
+# ====================
+# Testing
+# ====================
+.tox/
+.nox/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+nosetests.xml
+*.cover
+*.log
+
+# ====================
+# Jupyter
+# ====================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ====================
+# VS Code
+# ====================
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# ====================
+# OS
+# ====================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ====================
+# Misc
+# ====================
+*.bak
+*.tmp
+*.swp

@@ -1,0 +1,17 @@
+[project]
+name = "ai-web-browse"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.12",
+    "openai>=1.0",
+    "python-dotenv>=1.1.1",
+    "requests>=2.32",
+    "rich>=13.0",
+]
+
+[project.scripts]
+browse-website = "browse_web:browse_website_cli"
+
+[tool.uv]
+package = true
