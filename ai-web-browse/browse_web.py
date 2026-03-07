@@ -1,5 +1,7 @@
 import argparse
 import json
+import sys
+import warnings
 from urllib.parse import urlparse
 
 import requests
@@ -9,9 +11,15 @@ from openai import OpenAI
 from rich.console import Console
 from rich.markdown import Markdown
 
+# Suppress SSL warnings when we need to bypass verification
+warnings.filterwarnings("ignore", message="Unverified HTTPS request")
+
 load_dotenv(override=True)
 openai = OpenAI()
 console = Console()
+
+# Limit content length to protect from overwhelming token usage on very large websites
+MAX_CONTENT_LENGTH = 5000
 
 
 def scrape_page(url: str, timeout: int = 10) -> tuple[str, list[str]]:
@@ -24,8 +32,17 @@ def scrape_page(url: str, timeout: int = 10) -> tuple[str, list[str]]:
         )
     }
 
-    response = requests.get(url, headers=headers, timeout=timeout)
-    response.raise_for_status()
+    try:
+        console.print(f"[dim]Fetching {url}...[/dim]")
+        response = requests.get(url, headers=headers, timeout=timeout, verify=True)
+        response.raise_for_status()
+    except requests.exceptions.SSLError:
+        console.print("[yellow]SSL error, retrying without verification...[/yellow]")
+        response = requests.get(url, headers=headers, timeout=timeout, verify=False)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise
 
     soup = BeautifulSoup(response.text, "html.parser")
 
@@ -48,12 +65,16 @@ def scrape_page(url: str, timeout: int = 10) -> tuple[str, list[str]]:
     lines = [line.strip() for line in text.splitlines()]
     cleaned = "\n".join(line for line in lines if line)
 
+    # Truncate to protect from overwhelming token usage
+    if len(cleaned) > MAX_CONTENT_LENGTH:
+        cleaned = cleaned[:MAX_CONTENT_LENGTH] + "\n...[content truncated]"
+
     return cleaned, links
 
 
 def get_summary(page_text: str) -> str:
     response = openai.chat.completions.create(
-        model="gpt-4.1-nano",
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
@@ -88,7 +109,7 @@ def get_important_links(page_text: str, links: list[str]) -> list[dict]:
     if not links:
         return []
     response = openai.chat.completions.create(
-        model="gpt-4.1-nano",
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
@@ -145,12 +166,26 @@ def browse(url: str):
         )
 
 
-def browse_website_cli():
-    parser = argparse.ArgumentParser(description="Browse a website using AI.")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Browse and explore websites interactively using AI."
+    )
     parser.add_argument("url", help="The URL of the website to browse")
     args = parser.parse_args()
-    browse(args.url)
+
+    try:
+        browse(args.url)
+    except requests.exceptions.RequestException:
+        console.print(
+            "\n[red]❌ Failed to fetch website content. Please check the URL and try again.[/red]"
+        )
+        sys.exit(1)
+    except Exception as e:
+        console.print(
+            f"\n[red]❌ An unexpected error occurred: {type(e).__name__}: {e}[/red]"
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    browse_website_cli()
+    main()

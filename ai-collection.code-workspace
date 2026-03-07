@@ -1,0 +1,22 @@
+{
+  "folders": [
+    {
+      "path": ".",
+      "name": "ai-collection"
+    },
+    {
+      "path": "ai-pitch-sales-meeting",
+      "name": "pitch-sales-meeting"
+    },
+    {
+      "path": "ai-web-browse",
+      "name": "web-browse"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/ai-pitch-sales-meeting": true,
+      "**/ai-web-browse": true
+    }
+  }
+}

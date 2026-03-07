@@ -1,9 +1,10 @@
 [project]
-name = "ai-web-browse"
+name = "ai-pitch-sales-meeting"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.12",
+    "ipython>=9.10.0",
     "openai>=1.0",
     "python-dotenv>=1.1.1",
     "requests>=2.32",
@@ -11,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-browse-website = "browse_web:main"
+pitch-meeting = "pitch:main"
 
 [tool.uv]
 package = true
