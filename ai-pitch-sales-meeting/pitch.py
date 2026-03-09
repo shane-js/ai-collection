@@ -84,6 +84,7 @@ def stream_sales_meeting_pitch(
     company_being_sold_to_url,
     product_or_service_url,
 ):
+    """Generate and stream a sales pitch, returning the complete pitch text."""
     system_prompt = """
         You are a top-tier sales agent tasked with creating a concise but compelling
         sales pitch for a company based on the contents of its website and the contents
@@ -106,10 +107,39 @@ def stream_sales_meeting_pitch(
         ],
         stream=True,
     )
+
+    # Capture the full pitch while streaming
+    full_pitch = []
     for chunk in stream:
         content = chunk.choices[0].delta.content or ""
         print(content, end="", flush=True)
+        full_pitch.append(content)
     print()  # Final newline
+
+    return "".join(full_pitch)
+
+
+def generate_meeting_agenda(pitch_text: str) -> str:
+    """Generate 3-5 bullet point meeting agenda items based on the sales pitch."""
+    system_prompt = """
+        You are a professional meeting facilitator. Given a sales pitch, generate
+        3-5 concise bullet point agenda items that should be covered if the prospect
+        agrees to the meeting. Focus on discussing value propositions, addressing
+        potential concerns, and next steps. Format as a clean bullet point list.
+    """
+
+    response = openai.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": f"Sales pitch:\n\n{pitch_text}\n\nGenerate 3-5 meeting agenda items.",
+            },
+        ],
+    )
+
+    return response.choices[0].message.content
 
 
 def main():
@@ -119,15 +149,40 @@ def main():
     parser.add_argument("company_name", help="Name of the company you're pitching to")
     parser.add_argument("company_url", help="URL of the company's website")
     parser.add_argument("product_url", help="URL of the product/service you're selling")
+    parser.add_argument(
+        "--agenda",
+        action="store_true",
+        help="Generate meeting agenda items based on the pitch",
+    )
+    parser.add_argument(
+        "--pitch-text",
+        help="Pass in existing pitch text to generate agenda (skips pitch generation)",
+    )
 
     args = parser.parse_args()
 
     try:
-        stream_sales_meeting_pitch(
-            company_being_sold_to=args.company_name,
-            company_being_sold_to_url=args.company_url,
-            product_or_service_url=args.product_url,
-        )
+        # If pitch text is provided, use it directly for agenda generation
+        if args.pitch_text:
+            pitch = args.pitch_text
+            print("Using provided pitch text...\n", file=sys.stderr)
+        else:
+            # Generate the pitch
+            pitch = stream_sales_meeting_pitch(
+                company_being_sold_to=args.company_name,
+                company_being_sold_to_url=args.company_url,
+                product_or_service_url=args.product_url,
+            )
+
+        # Generate agenda if requested
+        if args.agenda:
+            print("\n" + "=" * 60, file=sys.stderr)
+            print("MEETING AGENDA ITEMS:", file=sys.stderr)
+            print("=" * 60 + "\n", file=sys.stderr)
+
+            agenda = generate_meeting_agenda(pitch)
+            print(agenda)
+
     except requests.exceptions.RequestException as e:
         print(
             "\n❌ Failed to fetch website content. Please check the URLs and try again.",

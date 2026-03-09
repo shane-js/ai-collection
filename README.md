@@ -6,7 +6,7 @@ A collection of AI-powered CLI tools.
 
 ## Projects
 
-**🎯 [ai-pitch-sales-meeting](./ai-pitch-sales-meeting)** — Generate sales pitches by analyzing websites  
+**🎯 [ai-pitch-sales-meeting](./ai-pitch-sales-meeting)** — Generate sales pitches and meeting agendas by analyzing websites  
 **🌐 [ai-web-browse](./ai-web-browse)** — Interactively browse and summarize websites
 
 ## Quick Start
