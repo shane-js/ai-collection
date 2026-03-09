@@ -16,6 +16,14 @@ Browse any website and get an AI-generated summary with suggested links to explo
 uv run browse-website "https://github.com"
 ```
 
+### View Cost Information
+
+Display token usage and cost for the browsing session:
+
+```bash
+uv run browse-website "https://github.com" --cost
+```
+
 The tool will:
 - Fetch and parse the website content
 - Generate a concise summary of the page
@@ -43,11 +51,14 @@ uv run browse-website --help
 - ✅ Rich terminal formatting with colors
 - ✅ SSL error handling
 - ✅ Filters out navigation, ads, and boilerplate
+- ✅ Token usage and cost tracking with --cost flag
+- ✅ Powered by LiteLLM for flexible LLM provider support
 
 ## Requirements
 
 - Python 3.11+
 - OpenAI API key (set as `OPENAI_API_KEY` environment variable)
+- LiteLLM (supports multiple LLM providers)
 
 ## Example Session
 

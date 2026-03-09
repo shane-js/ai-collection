@@ -4,10 +4,10 @@ import sys
 import warnings
 from urllib.parse import urlparse
 
+import litellm
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from openai import OpenAI
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -15,11 +15,40 @@ from rich.markdown import Markdown
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
 load_dotenv(override=True)
-openai = OpenAI()
 console = Console()
 
 # Limit content length to protect from overwhelming token usage on very large websites
 MAX_CONTENT_LENGTH = 5000
+
+# Global cost tracker for the browsing session
+cost_tracker = {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+    "cost_usd": 0.0,
+}
+
+
+def track_usage(response):
+    """Update global cost tracker with usage from an API call."""
+    if not response:
+        return
+
+    # Get usage info
+    usage_info = getattr(response, "usage", None)
+    if usage_info:
+        prompt_tokens = getattr(usage_info, "prompt_tokens", 0)
+        completion_tokens = getattr(usage_info, "completion_tokens", 0)
+        total_tokens = getattr(usage_info, "total_tokens", 0)
+
+        cost_tracker["prompt_tokens"] += prompt_tokens
+        cost_tracker["completion_tokens"] += completion_tokens
+        cost_tracker["total_tokens"] += total_tokens
+
+    # Get cost from LiteLLM's built-in cost tracking
+    hidden_params = getattr(response, "_hidden_params", {})
+    response_cost = hidden_params.get("response_cost", 0) or 0.0
+    cost_tracker["cost_usd"] += response_cost
 
 
 def scrape_page(url: str, timeout: int = 10) -> tuple[str, list[str]]:
@@ -73,8 +102,8 @@ def scrape_page(url: str, timeout: int = 10) -> tuple[str, list[str]]:
 
 
 def get_summary(page_text: str) -> str:
-    response = openai.chat.completions.create(
-        model="gpt-4o-mini",
+    response = litellm.completion(
+        model="gpt-4.1-mini",
         messages=[
             {
                 "role": "system",
@@ -102,14 +131,16 @@ def get_summary(page_text: str) -> str:
             {"role": "user", "content": "Website content:\n" + page_text},
         ],
     )
+
+    track_usage(response)
     return response.choices[0].message.content
 
 
 def get_important_links(page_text: str, links: list[str]) -> list[dict]:
     if not links:
         return []
-    response = openai.chat.completions.create(
-        model="gpt-4o-mini",
+    response = litellm.completion(
+        model="gpt-4.1-mini",
         messages=[
             {
                 "role": "system",
@@ -129,17 +160,33 @@ def get_important_links(page_text: str, links: list[str]) -> list[dict]:
         ],
         response_format={"type": "json_object"},
     )
+
+    track_usage(response)
     data = json.loads(response.choices[0].message.content)
     return data.get("links", [])[:3]
 
 
-def browse(url: str):
+def browse(url: str, show_cost: bool = False):
     console.print(f"\n[bold cyan]Fetching:[/bold cyan] {url}\n")
+
+    # Track tokens/cost for this page only
+    page_start_tokens = cost_tracker["total_tokens"]
+    page_start_cost = cost_tracker["cost_usd"]
+
     page_text, links = scrape_page(url)
     summary = get_summary(page_text)
     console.print(Markdown(summary))
 
     important_links = get_important_links(page_text, links)
+
+    # Show cost for this page if requested
+    if show_cost:
+        page_tokens = cost_tracker["total_tokens"] - page_start_tokens
+        page_cost = cost_tracker["cost_usd"] - page_start_cost
+        console.print(
+            f"\n[dim]This page: {page_tokens:,} tokens, ${page_cost:.4f}[/dim]"
+        )
+
     if not important_links:
         return
 
@@ -159,7 +206,7 @@ def browse(url: str):
         if choice == "q":
             break
         if choice in valid_choices:
-            browse(important_links[int(choice) - 1]["url"])
+            browse(important_links[int(choice) - 1]["url"], show_cost)
             break
         console.print(
             f"[red]Invalid choice. Enter {', '.join(valid_choices)}, or q.[/red]"
@@ -171,10 +218,25 @@ def main():
         description="Browse and explore websites interactively using AI."
     )
     parser.add_argument("url", help="The URL of the website to browse")
+    parser.add_argument(
+        "--cost",
+        action="store_true",
+        help="Display token usage and cost information after browsing",
+    )
     args = parser.parse_args()
 
     try:
-        browse(args.url)
+        browse(args.url, args.cost)
+
+        # Display total cost information if requested
+        if args.cost and cost_tracker["total_tokens"] > 0:
+            console.print("\n" + "=" * 60)
+            console.print("[bold]TOTAL COST FOR SESSION:[/bold]")
+            console.print("=" * 60)
+            console.print(f"Prompt tokens:     {cost_tracker['prompt_tokens']:,}")
+            console.print(f"Completion tokens: {cost_tracker['completion_tokens']:,}")
+            console.print(f"Total tokens:      {cost_tracker['total_tokens']:,}")
+            console.print(f"Cost (USD):        ${cost_tracker['cost_usd']:.4f}")
     except requests.exceptions.RequestException:
         console.print(
             "\n[red]❌ Failed to fetch website content. Please check the URL and try again.[/red]"

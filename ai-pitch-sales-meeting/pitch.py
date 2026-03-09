@@ -3,16 +3,15 @@ import sys
 import warnings
 from urllib.parse import urlparse
 
+import litellm
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from openai import OpenAI
 
 # Suppress SSL warnings when we need to bypass verification
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
 load_dotenv(override=True)
-openai = OpenAI()
 
 # Limit content length to protect from overwhelming token usage on very large websites
 MAX_CONTENT_LENGTH = 5000
@@ -84,7 +83,7 @@ def stream_sales_meeting_pitch(
     company_being_sold_to_url,
     product_or_service_url,
 ):
-    """Generate and stream a sales pitch, returning the complete pitch text."""
+    """Generate and stream a sales pitch, returning the complete pitch text and usage info."""
     system_prompt = """
         You are a top-tier sales agent tasked with creating a concise but compelling
         sales pitch for a company based on the contents of its website and the contents
@@ -99,27 +98,30 @@ def stream_sales_meeting_pitch(
         product_or_service_url=product_or_service_url,
     )
 
-    stream = openai.chat.completions.create(
+    response = litellm.completion(
         model="gpt-4.1-mini",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         stream=True,
+        stream_options={"include_usage": True},
     )
 
     # Capture the full pitch while streaming
     full_pitch = []
-    for chunk in stream:
-        content = chunk.choices[0].delta.content or ""
+    last_chunk = None
+    for chunk in response:
+        last_chunk = chunk
+        content = chunk.choices[0].delta.content or "" if chunk.choices else ""
         print(content, end="", flush=True)
         full_pitch.append(content)
     print()  # Final newline
 
-    return "".join(full_pitch)
+    return "".join(full_pitch), last_chunk
 
 
-def generate_meeting_agenda(pitch_text: str) -> str:
+def generate_meeting_agenda(pitch_text: str):
     """Generate 3-5 bullet point meeting agenda items based on the sales pitch."""
     system_prompt = """
         You are a professional meeting facilitator. Given a sales pitch, generate
@@ -128,7 +130,7 @@ def generate_meeting_agenda(pitch_text: str) -> str:
         potential concerns, and next steps. Format as a clean bullet point list.
     """
 
-    response = openai.chat.completions.create(
+    response = litellm.completion(
         model="gpt-4.1-mini",
         messages=[
             {"role": "system", "content": system_prompt},
@@ -139,7 +141,35 @@ def generate_meeting_agenda(pitch_text: str) -> str:
         ],
     )
 
-    return response.choices[0].message.content
+    return response.choices[0].message.content, response
+
+
+def calculate_cost(response) -> dict:
+    """Calculate cost from LiteLLM response object."""
+    if not response:
+        return {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost_usd": 0.0,
+        }
+
+    # Get usage info
+    usage_info = getattr(response, "usage", None)
+    prompt_tokens = getattr(usage_info, "prompt_tokens", 0) if usage_info else 0
+    completion_tokens = getattr(usage_info, "completion_tokens", 0) if usage_info else 0
+    total_tokens = getattr(usage_info, "total_tokens", 0) if usage_info else 0
+
+    # Get cost from LiteLLM's built-in cost tracking
+    hidden_params = getattr(response, "_hidden_params", {})
+    cost_usd = hidden_params.get("response_cost", 0) or 0.0
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "cost_usd": cost_usd,
+    }
 
 
 def main():
@@ -158,8 +188,21 @@ def main():
         "--pitch-text",
         help="Pass in existing pitch text to generate agenda (skips pitch generation)",
     )
+    parser.add_argument(
+        "--cost",
+        action="store_true",
+        help="Display token usage and cost information",
+    )
 
     args = parser.parse_args()
+
+    # Track total usage across all API calls
+    total_cost_info = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+    }
 
     try:
         # If pitch text is provided, use it directly for agenda generation
@@ -168,11 +211,16 @@ def main():
             print("Using provided pitch text...\n", file=sys.stderr)
         else:
             # Generate the pitch
-            pitch = stream_sales_meeting_pitch(
+            pitch, response = stream_sales_meeting_pitch(
                 company_being_sold_to=args.company_name,
                 company_being_sold_to_url=args.company_url,
                 product_or_service_url=args.product_url,
             )
+
+            # Track cost
+            cost_info = calculate_cost(response)
+            for key in total_cost_info:
+                total_cost_info[key] += cost_info[key]
 
         # Generate agenda if requested
         if args.agenda:
@@ -180,8 +228,35 @@ def main():
             print("MEETING AGENDA ITEMS:", file=sys.stderr)
             print("=" * 60 + "\n", file=sys.stderr)
 
-            agenda = generate_meeting_agenda(pitch)
+            agenda, response = generate_meeting_agenda(pitch)
             print(agenda)
+
+            # Track cost
+            cost_info = calculate_cost(response)
+            for key in total_cost_info:
+                total_cost_info[key] += cost_info[key]
+
+        # Display cost information if requested
+        if args.cost and total_cost_info["total_tokens"] > 0:
+            print("\n" + "=" * 60, file=sys.stderr)
+            print("COST INFORMATION:", file=sys.stderr)
+            print("=" * 60, file=sys.stderr)
+            print(
+                f"Prompt tokens:     {total_cost_info['prompt_tokens']:,}",
+                file=sys.stderr,
+            )
+            print(
+                f"Completion tokens: {total_cost_info['completion_tokens']:,}",
+                file=sys.stderr,
+            )
+            print(
+                f"Total tokens:      {total_cost_info['total_tokens']:,}",
+                file=sys.stderr,
+            )
+            print(
+                f"Cost (USD):        ${total_cost_info['cost_usd']:.4f}",
+                file=sys.stderr,
+            )
 
     except requests.exceptions.RequestException as e:
         print(

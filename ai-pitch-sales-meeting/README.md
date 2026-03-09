@@ -31,6 +31,20 @@ Generate both a sales pitch and 3-5 meeting agenda items:
 uv run pitch-meeting "HuggingFace" "https://huggingface.co" "https://openai.com" --agenda
 ```
 
+### View Cost Information
+
+Display token usage and cost for the API calls:
+
+```bash
+uv run pitch-meeting "HuggingFace" "https://huggingface.co" "https://openai.com" --cost
+```
+
+You can combine flags:
+
+```bash
+uv run pitch-meeting "HuggingFace" "https://huggingface.co" "https://openai.com" --agenda --cost
+```
+
 ### Generate Agenda from Existing Pitch
 
 If you already have a pitch and just want to generate agenda items:
@@ -41,9 +55,10 @@ uv run pitch-meeting "Company" "https://example.com" "https://product.com" --pit
 
 The tool will:
 - Scrape both websites to extract content
-- Generate a personalized sales pitch using GPT-4.1-mini
+- Generate a personalized sales pitch using gpt-4o-mini (via LiteLLM)
 - Stream the output directly to your terminal
 - Optionally generate meeting agenda items if the meeting is agreed to
+- Optionally display token usage and cost information
 
 ### Help
 
@@ -58,13 +73,16 @@ uv run pitch-meeting --help
 - ✅ Streaming output for immediate feedback
 - ✅ Meeting agenda generation (3-5 bullet points)
 - ✅ Support for using existing pitch text
+- ✅ Token usage and cost tracking with --cost flag
 - ✅ SSL error handling and retry logic
 - ✅ Best sales framework techniques applied
+- ✅ Powered by LiteLLM for flexible LLM provider support
 
 ## Requirements
 
 - Python 3.11+
 - OpenAI API key (set as `OPENAI_API_KEY` environment variable)
+- LiteLLM (supports multiple LLM providers)
 
 ## Example Output
 
