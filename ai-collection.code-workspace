@@ -9,6 +9,10 @@
       "name": "pitch-sales-meeting"
     },
     {
+      "path": "ai-terrible-advice-sft-data-gen",
+      "name": "terrible-advice-sft-data-gen"
+    },
+    {
       "path": "ai-web-browse",
       "name": "web-browse"
     }
@@ -16,6 +20,7 @@
   "settings": {
     "files.exclude": {
       "**/ai-pitch-sales-meeting": true,
+      "**/ai-terrible-advice-sft-data-gen": true,
       "**/ai-web-browse": true
     }
   }
